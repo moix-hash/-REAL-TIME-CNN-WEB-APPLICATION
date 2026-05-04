@@ -12,11 +12,11 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'dataset'
 app.config['MODEL_FOLDER'] = 'models'
 app.config['STATIC_FOLDER'] = 'static'
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  
 
-# Global training state
+
 training_state = {
-    'status': 'idle',       # idle | training | done | error
+    'status': 'idle',       
     'epoch': 0,
     'total_epochs': 0,
     'accuracy': 0.0,
@@ -30,9 +30,6 @@ training_state = {
 }
 training_lock = threading.Lock()
 
-# ---------------------------------------------------------------------------
-# Lazy imports (TF is heavy – only pulled in when needed)
-# ---------------------------------------------------------------------------
 def get_tf():
     import tensorflow as tf
     return tf
@@ -41,9 +38,6 @@ def get_model_builder():
     from model_builder import train_model
     return train_model
 
-# ---------------------------------------------------------------------------
-# Routes – Pages
-# ---------------------------------------------------------------------------
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -52,9 +46,6 @@ def index():
 def train_page():
     return render_template('train.html')
 
-# ---------------------------------------------------------------------------
-# Dataset management
-# ---------------------------------------------------------------------------
 @app.route('/api/classes', methods=['GET'])
 def list_classes():
     dataset_dir = app.config['UPLOAD_FOLDER']
@@ -145,10 +136,6 @@ def capture_image():
         fh.write(img_bytes)
     return jsonify({'success': True, 'filename': fname})
 
-
-# ---------------------------------------------------------------------------
-# Training
-# ---------------------------------------------------------------------------
 @app.route('/api/train', methods=['POST'])
 def start_training():
     global training_state
@@ -204,9 +191,6 @@ def train_status():
         return jsonify(dict(training_state))
 
 
-# ---------------------------------------------------------------------------
-# Inference
-# ---------------------------------------------------------------------------
 @app.route('/api/predict', methods=['POST'])
 def predict():
     from model_builder import load_saved_model, preprocess_image
@@ -223,7 +207,6 @@ def predict():
     classes = meta['classes']
     img_size = meta.get('img_size', 150)
 
-    # Accept either file upload or base64
     image_data = None
     if 'image' in request.files:
         f = request.files['image']
@@ -248,18 +231,9 @@ def predict():
     results.sort(key=lambda x: x['confidence'], reverse=True)
     return jsonify({'predictions': results, 'top': results[0]})
 
-
-# ---------------------------------------------------------------------------
-# Static helpers
-# ---------------------------------------------------------------------------
 @app.route('/static/<path:filename>')
 def serve_static(filename):
     return send_from_directory(app.config['STATIC_FOLDER'], filename)
-
-
-# ---------------------------------------------------------------------------
-# Bootstrap directories & run
-# ---------------------------------------------------------------------------
 if __name__ == '__main__':
     for d in ['dataset', 'models', 'static', 'templates']:
         os.makedirs(d, exist_ok=True)
