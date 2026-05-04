@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NeuralLens — Image Classifier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3d;
+    --accent: #7c6af5;
+    --accent2: #4ecdc4;
+    --accent3: #ff6b6b;
+    --text: #e8e6f0;
+    --muted: #6b6880;
+    --success: #56e09e;
+    --warning: #ffd166;
+    --radius: 12px;
+    --mono: 'DM Mono', monospace;
+    --display: 'Syne', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.3;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Glow orb */
+  body::after {
+    content: '';
+    position: fixed;
+    width: 600px; height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(124,106,245,0.12) 0%, transparent 70%);
+    top: -200px; right: -200px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .layout { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+  /* NAV */
+  nav {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 0;
+    position: sticky; top: 0;
+    background: rgba(10,10,15,0.85);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+  .nav-inner {
+    display: flex; align-items: center; justify-content: space-between;
+    max-width: 1200px; margin: 0 auto; padding: 0 24px;
+  }
+  .logo {
+    font-family: var(--display);
+    font-size: 1.4rem; font-weight: 800;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .nav-links { display: flex; gap: 8px; }
+  .nav-link {
+    padding: 7px 16px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    text-decoration: none;
+    color: var(--muted);
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .nav-link:hover { color: var(--text); background: var(--surface); }
+  .nav-link.active { color: var(--accent); background: rgba(124,106,245,0.1); }
+
+  /* PAGE HEADER */
+  .page-header { padding: 60px 0 40px; }
+  .page-header h1 {
+    font-family: var(--display);
+    font-size: clamp(2rem, 4vw, 3rem);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    margin-bottom: 12px;
+  }
+  .page-header p { color: var(--muted); font-size: 0.9rem; line-height: 1.6; }
+
+  /* TABS */
+  .tab-bar {
+    display: flex; gap: 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 32px;
+  }
+  .tab-btn {
+    padding: 10px 20px;
+    background: none; border: none;
+    color: var(--muted);
+    font-family: var(--mono); font-size: 0.8rem;
+    letter-spacing: 0.05em; text-transform: uppercase;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.2s;
+  }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-btn:hover:not(.active) { color: var(--text); }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* CARDS */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .card-title {
+    font-family: var(--display);
+    font-size: 1rem; font-weight: 700;
+    margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-title span.dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent); flex-shrink: 0;
+  }
+
+  /* FORMS */
+  .form-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 140px; }
+  label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  input[type="text"], select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: var(--mono); font-size: 0.85rem;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+  input[type="text"]:focus, select:focus {
+    outline: none; border-color: var(--accent);
+  }
+
+  /* BUTTONS */
+  .btn {
+    padding: 10px 20px;
+    border-radius: 8px; border: none;
+    font-family: var(--mono); font-size: 0.8rem;
+    letter-spacing: 0.05em; text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-primary:hover { background: #9080f8; transform: translateY(-1px); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-danger {
+    background: transparent;
+    color: var(--accent3);
+    border: 1px solid transparent;
+  }
+  .btn-danger:hover { background: rgba(255,107,107,0.1); }
+  .btn-sm { padding: 6px 12px; font-size: 0.75rem; }
+  .btn-teal { background: var(--accent2); color: #0a0a0f; }
+  .btn-teal:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
+  /* CLASS LIST */
+  .class-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .class-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex; flex-direction: column; gap: 8px;
+    transition: border-color 0.2s;
+    cursor: pointer;
+  }
+  .class-card:hover { border-color: var(--accent); }
+  .class-card.selected { border-color: var(--accent); background: rgba(124,106,245,0.08); }
+  .class-name {
+    font-family: var(--display);
+    font-size: 0.95rem; font-weight: 700;
+  }
+  .class-count { font-size: 0.75rem; color: var(--muted); }
+  .class-actions { display: flex; gap: 6px; margin-top: 4px; }
+
+  /* UPLOAD DROP ZONE */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--surface2);
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(124,106,245,0.06);
+  }
+  .drop-zone input { display: none; }
+  .drop-icon { font-size: 2.5rem; margin-bottom: 8px; }
+  .drop-label { font-size: 0.85rem; color: var(--muted); }
+
+  /* WEBCAM */
+  #webcamVideo {
+    width: 100%; max-width: 400px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    display: block;
+  }
+  .webcam-controls { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+
+  /* PREDICT */
+  .predict-area { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 700px) { .predict-area { grid-template-columns: 1fr; } }
+
+  .preview-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    min-height: 220px;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+  .preview-box img {
+    max-width: 100%; max-height: 300px;
+    object-fit: contain;
+  }
+  .preview-placeholder { color: var(--muted); font-size: 0.85rem; }
+
+  /* PREDICTION BARS */
+  .pred-list { display: flex; flex-direction: column; gap: 10px; }
+  .pred-item { display: flex; flex-direction: column; gap: 4px; }
+  .pred-label-row { display: flex; justify-content: space-between; font-size: 0.8rem; }
+  .pred-bar-bg {
+    height: 6px; border-radius: 3px;
+    background: var(--surface2);
+    overflow: hidden;
+  }
+  .pred-bar-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width 0.6s ease;
+  }
+  .pred-bar-fill.top { background: linear-gradient(90deg, var(--accent2), var(--success)); }
+
+  /* NOTICE */
+  .notice {
+    font-size: 0.8rem; color: var(--muted);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-top: 10px;
+  }
+  .notice.warn { border-color: var(--warning); color: var(--warning); }
+  .notice.ok { border-color: var(--success); color: var(--success); }
+
+  /* SECTION DIVIDER */
+  .section-divider {
+    height: 1px; background: var(--border);
+    margin: 28px 0;
+  }
+
+  canvas { display: none; }
+
+  .tag {
+    display: inline-block;
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: rgba(124,106,245,0.15);
+    color: var(--accent);
+    letter-spacing: 0.04em;
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <span class="logo">NeuralLens</span>
+    <div class="nav-links">
+      <a href="/" class="nav-link active">Dataset</a>
+      <a href="/train-page" class="nav-link">Train</a>
+    </div>
+  </div>
+</nav>
+
+<div class="layout">
+  <div class="page-header">
+    <h1>Dataset Manager <span class="tag">+ Inference</span></h1>
+    <p>Create classes · upload or capture images · run live predictions</p>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('dataset', this)">Dataset</button>
+    <button class="tab-btn" onclick="switchTab('capture', this)">Webcam Capture</button>
+    <button class="tab-btn" onclick="switchTab('predict', this)">Predict</button>
+  </div>
+
+  <!-- ===== DATASET TAB ===== -->
+  <div class="tab-panel active" id="tab-dataset">
+    <div class="card">
+      <div class="card-title"><span class="dot"></span>Create Class</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="newClassName">Class name</label>
+          <input type="text" id="newClassName" placeholder="e.g. cat, dog, rose…"/>
+        </div>
+        <button class="btn btn-primary" onclick="createClass()">Add Class</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="dot"></span>Your Classes</div>
+      <div class="class-grid" id="classGrid">
+        <div style="color:var(--muted);font-size:0.8rem;">Loading classes…</div>
+      </div>
+    </div>
+
+    <div class="card" id="uploadCard" style="display:none">
+      <div class="card-title"><span class="dot"></span>Upload Images to <span id="uploadTargetLabel" style="color:var(--accent)">—</span></div>
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <input type="file" id="fileInput" accept="image/*" multiple onchange="handleFileSelect(this.files)"/>
+        <div class="drop-icon">📂</div>
+        <div class="drop-label">Drop images here or click to browse<br><small>PNG · JPG · WEBP supported</small></div>
+      </div>
+      <div id="uploadNotice" class="notice" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- ===== WEBCAM TAB ===== -->
+  <div class="tab-panel" id="tab-capture">
+    <div class="card">
+      <div class="card-title"><span class="dot"></span>Webcam Capture</div>
+      <div class="form-row" style="margin-bottom:16px">
+        <div class="form-group">
+          <label>Target class</label>
+          <select id="captureClass"></select>
+        </div>
+        <button class="btn btn-primary" onclick="startWebcam()">Start Camera</button>
+        <button class="btn btn-ghost" onclick="stopWebcam()">Stop</button>
+      </div>
+      <video id="webcamVideo" autoplay playsinline muted></video>
+      <canvas id="captureCanvas"></canvas>
+      <div class="webcam-controls">
+        <button class="btn btn-teal" onclick="captureFrame()">📸 Capture</button>
+        <button class="btn btn-ghost" onclick="captureStream()" id="streamBtn">▶ Auto Capture (1/s)</button>
+      </div>
+      <div id="captureNotice" class="notice" style="display:none;margin-top:12px"></div>
+    </div>
+  </div>
+
+  <!-- ===== PREDICT TAB ===== -->
+  <div class="tab-panel" id="tab-predict">
+    <div class="card">
+      <div class="card-title"><span class="dot"></span>Live Prediction</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px">
+        <button class="btn btn-primary" onclick="document.getElementById('predictFile').click()">Upload Image</button>
+        <button class="btn btn-teal" onclick="startPredictWebcam()">Use Webcam</button>
+        <button class="btn btn-ghost" onclick="stopPredictWebcam()">Stop Webcam</button>
+        <input type="file" id="predictFile" accept="image/*" style="display:none" onchange="predictFromFile(this)"/>
+      </div>
+      <div class="predict-area">
+        <div>
+          <video id="predictVideo" style="width:100%;border-radius:10px;border:1px solid var(--border);display:none" autoplay playsinline muted></video>
+          <div class="preview-box" id="previewBox">
+            <span class="preview-placeholder">No image selected</span>
+          </div>
+        </div>
+        <div>
+          <div id="predResults">
+            <div style="color:var(--muted);font-size:0.85rem;">Results will appear here…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /layout -->
+
+<script>
+// ============================================================
+// State
+// ============================================================
+let selectedClass = null;
+let webcamStream = null;
+let autoCapture = null;
+let predictStream = null;
+let predictInterval = null;
+
+// ============================================================
+// Tabs
+// ============================================================
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'capture' || name === 'predict') loadClasses(); // refresh selects
+}
+
+// ============================================================
+// Classes
+// ============================================================
+async function loadClasses() {
+  const res = await fetch('/api/classes');
+  const { classes } = await res.json();
+  renderClassGrid(classes);
+  renderClassSelect(classes);
+  return classes;
+}
+
+function renderClassGrid(classes) {
+  const grid = document.getElementById('classGrid');
+  if (!classes.length) {
+    grid.innerHTML = '<div style="color:var(--muted);font-size:0.8rem;">No classes yet. Create one above.</div>';
+    return;
+  }
+  grid.innerHTML = classes.map(c => `
+    <div class="class-card ${c.name === selectedClass ? 'selected' : ''}"
+         onclick="selectClass('${c.name}')">
+      <div class="class-name">${c.name}</div>
+      <div class="class-count">${c.count} image${c.count !== 1 ? 's' : ''}</div>
+      <div class="class-actions">
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();selectClass('${c.name}')">Upload</button>
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteClass('${c.name}')">Delete</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderClassSelect(classes) {
+  const sel = document.getElementById('captureClass');
+  sel.innerHTML = classes.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+}
+
+async function createClass() {
+  const inp = document.getElementById('newClassName');
+  const name = inp.value.trim();
+  if (!name) return;
+  await fetch('/api/classes', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({name})
+  });
+  inp.value = '';
+  loadClasses();
+}
+
+async function deleteClass(name) {
+  if (!confirm(`Delete class "${name}" and all its images?`)) return;
+  await fetch(`/api/classes/${name}`, { method: 'DELETE' });
+  if (selectedClass === name) {
+    selectedClass = null;
+    document.getElementById('uploadCard').style.display = 'none';
+  }
+  loadClasses();
+}
+
+function selectClass(name) {
+  selectedClass = name;
+  document.getElementById('uploadCard').style.display = 'block';
+  document.getElementById('uploadTargetLabel').textContent = name;
+  loadClasses();
+}
+
+// ============================================================
+// File Upload
+// ============================================================
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  handleFileSelect(e.dataTransfer.files);
+});
+
+async function handleFileSelect(files) {
+  if (!selectedClass) return showNotice('uploadNotice', 'Select a class first', 'warn');
+  if (!files.length) return;
+  const fd = new FormData();
+  fd.append('class_name', selectedClass);
+  for (const f of files) fd.append('images', f);
+  showNotice('uploadNotice', `Uploading ${files.length} file(s)…`);
+  const res = await fetch('/api/upload', { method: 'POST', body: fd });
+  const data = await res.json();
+  showNotice('uploadNotice', `✓ Saved ${data.saved} image(s) to "${selectedClass}"`, 'ok');
+  loadClasses();
+}
+
+// ============================================================
+// Webcam Capture
+// ============================================================
+async function startWebcam() {
+  try {
+    webcamStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    document.getElementById('webcamVideo').srcObject = webcamStream;
+  } catch(e) {
+    showNotice('captureNotice', 'Camera access denied: ' + e.message, 'warn');
+  }
+}
+
+function stopWebcam() {
+  if (webcamStream) {
+    webcamStream.getTracks().forEach(t => t.stop());
+    webcamStream = null;
+  }
+  clearInterval(autoCapture);
+  autoCapture = null;
+  document.getElementById('streamBtn').textContent = '▶ Auto Capture (1/s)';
+}
+
+function captureFrame() {
+  const video = document.getElementById('webcamVideo');
+  const canvas = document.getElementById('captureCanvas');
+  if (!webcamStream) return showNotice('captureNotice', 'Start camera first', 'warn');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  const className = document.getElementById('captureClass').value;
+  if (!className) return showNotice('captureNotice', 'Select a class', 'warn');
+  const imageData = canvas.toDataURL('image/jpeg', 0.85);
+  fetch('/api/capture', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ class_name: className, image: imageData })
+  }).then(() => showNotice('captureNotice', `Captured → ${className}`, 'ok'));
+}
+
+function captureStream() {
+  const btn = document.getElementById('streamBtn');
+  if (autoCapture) {
+    clearInterval(autoCapture);
+    autoCapture = null;
+    btn.textContent = '▶ Auto Capture (1/s)';
+  } else {
+    autoCapture = setInterval(captureFrame, 1000);
+    btn.textContent = '⏹ Stop Auto Capture';
+  }
+}
+
+// ============================================================
+// Predict
+// ============================================================
+async function predictFromFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const box = document.getElementById('previewBox');
+    box.innerHTML = `<img src="${e.target.result}" alt="preview"/>`;
+    const fd = new FormData();
+    fd.append('image', file);
+    const res = await fetch('/api/predict', { method: 'POST', body: fd });
+    if (!res.ok) {
+      const err = await res.json();
+      document.getElementById('predResults').innerHTML =
+        `<div class="notice warn">${err.error}</div>`;
+      return;
+    }
+    const data = await res.json();
+    renderPredictions(data.predictions);
+  };
+  reader.readAsDataURL(file);
+}
+
+async function startPredictWebcam() {
+  const video = document.getElementById('predictVideo');
+  try {
+    predictStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    video.srcObject = predictStream;
+    video.style.display = 'block';
+    document.getElementById('previewBox').style.display = 'none';
+    // predict every 1.5s
+    predictInterval = setInterval(predictFromWebcam, 1500);
+  } catch(e) {
+    alert('Camera error: ' + e.message);
+  }
+}
+
+function stopPredictWebcam() {
+  if (predictStream) predictStream.getTracks().forEach(t => t.stop());
+  clearInterval(predictInterval);
+  document.getElementById('predictVideo').style.display = 'none';
+  document.getElementById('previewBox').style.display = 'flex';
+}
+
+async function predictFromWebcam() {
+  const video = document.getElementById('predictVideo');
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  if (!canvas.width) return;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  const imageData = canvas.toDataURL('image/jpeg', 0.8);
+  const res = await fetch('/api/predict', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ image: imageData })
+  });
+  if (!res.ok) return;
+  const data = await res.json();
+  renderPredictions(data.predictions);
+}
+
+function renderPredictions(preds) {
+  document.getElementById('predResults').innerHTML = `
+    <div style="margin-bottom:12px">
+      <div style="font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Top Prediction</div>
+      <div style="font-family:var(--display);font-size:1.6rem;font-weight:800;color:var(--accent2)">${preds[0].class}</div>
+      <div style="font-size:0.8rem;color:var(--muted)">${(preds[0].confidence*100).toFixed(1)}% confident</div>
+    </div>
+    <div class="section-divider"></div>
+    <div class="pred-list">
+      ${preds.map((p,i) => `
+        <div class="pred-item">
+          <div class="pred-label-row">
+            <span>${p.class}</span>
+            <span>${(p.confidence*100).toFixed(1)}%</span>
+          </div>
+          <div class="pred-bar-bg">
+            <div class="pred-bar-fill ${i===0?'top':''}" style="width:${(p.confidence*100).toFixed(1)}%"></div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ============================================================
+// Util
+// ============================================================
+function showNotice(id, msg, type = '') {
+  const el = document.getElementById(id);
+  el.style.display = 'block';
+  el.textContent = msg;
+  el.className = 'notice' + (type ? ' ' + type : '');
+}
+
+// Init
+loadClasses();
+</script>
+</body>
+</html>
