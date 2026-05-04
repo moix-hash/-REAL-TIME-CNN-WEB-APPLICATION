@@ -8,28 +8,24 @@ import json
 import numpy as np
 
 
-# ---------------------------------------------------------------------------
-# Model architecture
-# ---------------------------------------------------------------------------
+
 def create_model(num_classes: int, img_size: int = 150):
     import tensorflow as tf
     from tensorflow.keras import layers, models, regularizers
 
     model = models.Sequential([
-        # Block 1
+        
         layers.Conv2D(32, (3, 3), activation='relu', padding='same',
                       input_shape=(img_size, img_size, 3)),
         layers.BatchNormalization(),
         layers.MaxPooling2D((2, 2)),
         layers.Dropout(0.25),
 
-        # Block 2
         layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
         layers.BatchNormalization(),
         layers.MaxPooling2D((2, 2)),
         layers.Dropout(0.25),
 
-        # Block 3
         layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
         layers.BatchNormalization(),
         layers.MaxPooling2D((2, 2)),
@@ -49,10 +45,6 @@ def create_model(num_classes: int, img_size: int = 150):
     )
     return model
 
-
-# ---------------------------------------------------------------------------
-# Custom Keras callback – writes progress to the shared state dict
-# ---------------------------------------------------------------------------
 def make_progress_callback(state, lock, total_epochs):
     import tensorflow as tf
 
@@ -77,9 +69,6 @@ def make_progress_callback(state, lock, total_epochs):
     return ProgressCallback()
 
 
-# ---------------------------------------------------------------------------
-# Training entry-point called from the background thread in app.py
-# ---------------------------------------------------------------------------
 def train_model(
     dataset_dir: str,
     model_dir: str,
@@ -101,7 +90,6 @@ def train_model(
     os.makedirs(model_dir, exist_ok=True)
     os.makedirs(static_dir, exist_ok=True)
 
-    # ---- Data generators with augmentation --------------------------------
     train_datagen = ImageDataGenerator(
         rescale=1.0 / 255,
         rotation_range=20,
@@ -137,7 +125,6 @@ def train_model(
     with lock:
         state['classes'] = classes
 
-    # ---- Build & train model ----------------------------------------------
     model = create_model(num_classes, img_size)
 
     callbacks = [
@@ -158,7 +145,6 @@ def train_model(
         verbose=0,
     )
 
-    # ---- Save model + metadata --------------------------------------------
     model_path = os.path.join(model_dir, 'model.keras')
     model.save(model_path)
 
@@ -166,7 +152,6 @@ def train_model(
     with open(os.path.join(model_dir, 'meta.json'), 'w') as fh:
         json.dump(meta, fh)
 
-    # ---- Confusion matrix -------------------------------------------------
     val_gen.reset()
     y_pred_probs = model.predict(val_gen, verbose=0)
     y_pred = np.argmax(y_pred_probs, axis=1)
@@ -199,9 +184,6 @@ def train_model(
         state['confusion_matrix_path'] = cm_filename
 
 
-# ---------------------------------------------------------------------------
-# Inference helpers
-# ---------------------------------------------------------------------------
 _model_cache = {}
 
 def load_saved_model(model_path: str):
